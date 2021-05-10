@@ -1016,6 +1016,53 @@ class SparkSubmitSuite
     }
   }
 
+  test("support glob path for confs") {
+    withTempDir { tmpJarDir =>
+      withTempDir { tmpFileDir =>
+        withTempDir { tmpPyFileDir =>
+          withTempDir { tmpArchiveDir =>
+            val jar1 = TestUtils.createJarWithFiles(Map("test.resource" -> "1"), tmpJarDir)
+            val jar2 = TestUtils.createJarWithFiles(Map("test.resource" -> "USER"), tmpJarDir)
+
+            val file1 = File.createTempFile("tmpFile1", "", tmpFileDir)
+            val file2 = File.createTempFile("tmpFile2", "", tmpFileDir)
+
+            val pyFile1 = File.createTempFile("tmpPy1", ".py", tmpPyFileDir)
+            val pyFile2 = File.createTempFile("tmpPy2", ".egg", tmpPyFileDir)
+
+            val archive1 = File.createTempFile("archive1", ".zip", tmpArchiveDir)
+            val archive2 = File.createTempFile("archive2", ".zip", tmpArchiveDir)
+
+            val tempPyFile = File.createTempFile("tmpApp", ".py")
+            tempPyFile.deleteOnExit()
+
+            val args = Seq(
+              "--class", UserClasspathFirstTest.getClass.getName.stripPrefix("$"),
+              "--name", "testApp",
+              "--master", "yarn",
+              "--deploy-mode", "client",
+              "--conf", s"spark.jars=${tmpJarDir.getAbsolutePath}/*.jar",
+              "--conf", s"spark.files=${tmpFileDir.getAbsolutePath}/tmpFile*",
+              "--conf", s"spark.submit.pyFiles=${tmpPyFileDir.getAbsolutePath}/tmpPy*",
+              "--conf", s"spark.archives=${tmpArchiveDir.getAbsolutePath}/*.zip",
+              tempPyFile.toURI().toString())
+
+            val appArgs = new SparkSubmitArguments(args)
+            val (_, _, conf, _) = submit.prepareSubmitEnvironment(appArgs)
+            conf.get("spark.yarn.dist.jars").split(",").toSet should be
+            (Set(jar1.toURI.toString, jar2.toURI.toString))
+            conf.get("spark.yarn.dist.files").split(",").toSet should be
+            (Set(file1.toURI.toString, file2.toURI.toString))
+            conf.get("spark.yarn.dist.pyFiles").split(",").toSet should be
+            (Set(pyFile1.getAbsolutePath, pyFile2.getAbsolutePath))
+            conf.get("spark.yarn.dist.archives").split(",").toSet should be
+            (Set(archive1.toURI.toString, archive2.toURI.toString))
+          }
+        }
+      }
+    }
+  }
+
   test("SPARK-27575: yarn confs should merge new value with existing value") {
     val tmpJarDir = Utils.createTempDir()
     val jar1 = TestUtils.createJarWithFiles(Map("test.resource" -> "1"), tmpJarDir)
