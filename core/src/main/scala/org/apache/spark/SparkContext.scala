@@ -81,6 +81,8 @@ import org.apache.spark.util.logging.DriverLogger
  */
 class SparkContext(config: SparkConf) extends Logging {
 
+  import DependencyUtils._
+
   // The call site where this SparkContext was constructed.
   private val creationSite: CallSite = Utils.getCallSite()
 
@@ -423,10 +425,11 @@ class SparkContext(config: SparkConf) extends Logging {
 
     _conf.set(EXECUTOR_ID, SparkContext.DRIVER_IDENTIFIER)
 
-    _jars = Utils.getUserJars(_conf)
+    _jars = Utils.getUserJars(_conf).map(resolveGlobPaths(_, hadoopConfiguration))
     _files = _conf.getOption(FILES.key).map(_.split(",")).map(_.filter(_.nonEmpty))
-      .toSeq.flatten
+      .toSeq.flatten.map(resolveGlobPaths(_, hadoopConfiguration))
     _archives = _conf.getOption(ARCHIVES.key).map(Utils.stringToSeq).toSeq.flatten
+      .map(resolveGlobPaths(_, hadoopConfiguration))
 
     _eventLogDir =
       if (isEventLogEnabled) {

@@ -1237,6 +1237,44 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       }
     }
   }
+
+  test("support glob path") {
+    withTempDir { dir =>
+      val tmpJarDir = Utils.createTempDir(dir.getAbsolutePath)
+      val jar1 = TestUtils.createJarWithFiles(Map("test.resource" -> "1"), tmpJarDir)
+      val jar2 = TestUtils.createJarWithFiles(Map("test.resource" -> "USER"), tmpJarDir)
+
+      val tmpFileDir = Utils.createTempDir(dir.getAbsolutePath)
+      val file1 = File.createTempFile("tmpFile1", "", tmpFileDir)
+      val file2 = File.createTempFile("tmpFile2", "", tmpFileDir)
+
+      val tmpPyFileDir = Utils.createTempDir(dir.getAbsolutePath)
+      val pyFile1 = File.createTempFile("tmpPy1", ".py", tmpPyFileDir)
+      val pyFile2 = File.createTempFile("tmpPy2", ".egg", tmpPyFileDir)
+
+      val tmpArchiveDir = Utils.createTempDir(dir.getAbsolutePath)
+      val archive1 = File.createTempFile("archive1", ".zip", tmpArchiveDir)
+      val archive2 = File.createTempFile("archive2", ".zip", tmpArchiveDir)
+
+      try {
+        val conf = new SparkConf().setAppName("test").setMaster("local")
+        conf.set("spark.jars", s"${tmpJarDir.getAbsolutePath}/*.jar")
+        conf.set("spark.files", s"${tmpFileDir.getAbsolutePath}/tmpFile*")
+        conf.set("spark.submit.pyFiles", s"${tmpPyFileDir.getAbsolutePath}/tmpPy*")
+        conf.set("spark.archives", s"${tmpArchiveDir.getAbsolutePath}/*.zip")
+        sc = new SparkContext(conf)
+        sc.jars.toSet must be (
+          Set(jar1.toURI.toString, jar2.toURI.toString))
+        sc.files.toSet must be (
+          Set(file1.toURI.toString, file2.toURI.toString) ++
+          Set(pyFile1.getAbsolutePath, pyFile2.getAbsolutePath))
+        sc.archives.toSet must be (
+          Set(archive1.toURI.toString, archive2.toURI.toString))
+      } finally {
+        sc.stop()
+      }
+    }
+  }
 }
 
 object SparkContextSuite {
